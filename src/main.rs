@@ -1,54 +1,42 @@
-use std::path::PathBuf;
+use std::sync::{atomic::AtomicBool, Arc};
 
-use ethers::types::Address;
 use eyre::Result;
-use helios::{client::ClientBuilder, config::networks::Network, prelude::*};
-use serde::Deserialize;
 
-#[derive(Deserialize, Debug)]
-struct Config {
-    consensus_rpc: String,
-    untrusted_rpc: String,
-    smart_contract_address: String,
-    block_number: Option<u64>,
-}
+mod client;
+mod config;
+mod db;
+mod merkle;
+mod server;
+
+use client::start_client;
+use config::Config;
+use db::DB;
+use server::start_server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
 
     let config = envy::from_env::<Config>()?;
+    let term = Arc::new(AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
 
-    let mut client: Client<FileDB> = ClientBuilder::new()
-        .network(Network::MAINNET)
-        .consensus_rpc(&config.consensus_rpc)
-        .execution_rpc(&config.untrusted_rpc)
-        .load_external_fallback()
-        .data_dir(PathBuf::from("/tmp/helios"))
-        .build()?;
+    let db = DB::new(&config)?;
+    db.create_tables()?;
 
-    log::info!(
-        "Built client on network \"{}\" with external checkpoint fallbacks",
-        Network::MAINNET
-    );
+    let clone_db = db.clone();
+    let clone_config = config.clone();
+    tokio::spawn(async move {
+        let res = start_server(clone_config, clone_db).await;
+        log::info!("server was stopped, reason: {:?}", res);
+    });
 
-    client.start().await?;
-    log::info!("client started");
-
-    let filter = ethers::types::Filter::new()
-        .select(
-            config
-                .block_number
-                .map(Into::into)
-                .unwrap_or(ethers::core::types::BlockNumber::Latest)..,
-        )
-        .address(config.smart_contract_address.parse::<Address>().unwrap())
-        .event("Transfer(address,address,uint256)");
-
-    loop {
-        let logs = client.get_logs(&filter).await?;
-        log::info!("logs: {:#?}", logs);
-    }
+    tokio::spawn(async move {
+        let res = start_client(config, db.clone(), term).await;
+        log::info!("client was stopped, reason: {:?}", res);
+    })
+    .await
+    .expect("stop client successfully");
 
     Ok(())
 }
