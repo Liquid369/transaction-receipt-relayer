@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use ethers::{
     abi::AbiEncode,
@@ -17,11 +20,7 @@ pub struct DB {
 
 impl DB {
     pub fn new(config: &Config) -> Result<Self> {
-        let conn = if let Some(path) = config.db_path.clone() {
-            Connection::open(path)?
-        } else {
-            Connection::open_in_memory()?
-        };
+        let conn = Connection::open(Path::new(&config.database).join("db.sqlite"))?;
 
         Ok(DB {
             conn: Arc::new(Mutex::new(conn)),
@@ -47,7 +46,7 @@ impl DB {
             "CREATE TABLE IF NOT EXISTS receipts (
 				block_hash TEXT NOT NULL,
 				receipts TEXT NOT NULL,
-				PRIMARY KEY (block_number)
+				PRIMARY KEY (block_hash)
 			)",
             (),
         )?)
