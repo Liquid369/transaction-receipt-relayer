@@ -11,10 +11,12 @@ use ethers::{
 use eyre::Result;
 use helios::prelude::ExecutionBlock;
 use rusqlite::Connection;
+
 #[derive(Clone)]
 pub struct DB {
     conn: Arc<Mutex<Connection>>,
 }
+
 impl DB {
     pub fn new(config: &Config) -> Result<Self> {
         let conn = Connection::open(Path::new(&config.database).join("db.sqlite"))?;
@@ -47,6 +49,8 @@ impl DB {
             (),
         )?)
     }
+
+    #[allow(dead_code)]
     pub fn insert_block(&self, block_number: u64, block_hash: H256, block: &str) -> Result<usize> {
         let conn = self.conn.lock().expect("acquire mutex");
         Ok(conn.execute(
@@ -61,6 +65,8 @@ impl DB {
             (block_hash.encode_hex(), receipts),
         )?)
     }
+
+    #[allow(dead_code)]
     pub fn select_block_by_block_hash(&self, block_hash: H256) -> Result<Option<ExecutionBlock>> {
         let conn = self.conn.lock().expect("acquire mutex");
         let mut stmt = conn.prepare("SELECT block FROM blocks WHERE block_hash = :block_hash")?;
@@ -75,6 +81,8 @@ impl DB {
             .get(0)
             .cloned())
     }
+
+    #[allow(dead_code)]
     pub fn select_block_by_block_number(
         &self,
         block_number: u64,
@@ -92,6 +100,7 @@ impl DB {
             .get(0)
             .cloned())
     }
+
     pub fn select_receipts_by_block_hash(
         &self,
         block_hash: H256,
