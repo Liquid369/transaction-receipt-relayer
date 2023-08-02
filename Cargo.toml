@@ -30,6 +30,8 @@ serde_json = "1.0.97"
 sha3 = "0.10.8"
 signal-hook = "0.3.15"
 tokio = "1.28.2"
+proptest = "1.0.0"
+test-strategy = "0.3.0"
 
 [patch."https://github.com/a16z/helios.git"]
 helios = { git = "https://github.com/andor0/helios.git", branch = "max-supported-logs-number-as-environ-variable" }
