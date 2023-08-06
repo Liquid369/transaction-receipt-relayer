@@ -11,6 +11,9 @@ debug = []
 [dependencies]
 alloy-rlp.workspace = true
 bytes.workspace = true
+cita_trie.workspace = true
+eyre.workspace = true
+hasher.workspace = true
 keccak-hash.workspace = true
 
 [dev-dependencies]

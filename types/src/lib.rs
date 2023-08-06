@@ -12,6 +12,9 @@ pub use block_header::BlockHeader;
 mod bloom;
 pub use bloom::Bloom;
 
+mod receipt_merkle_proof;
+pub use receipt_merkle_proof::ReceiptMerkleProof;
+
 pub(crate) mod encode;
 
 /// A trait for types that can be hashed to a `H256`.
@@ -54,11 +57,13 @@ pub enum ValidationError {
     IncorrectBodyHash { expected: H256, actual: H256 },
     IncorrectReceiptHash { expected: H256, actual: H256 },
     IncorrectReceiptRoot { expected: H256, actual: H256 },
+    InternalError,
+    IntenalPatriciaTrieError,
 }
 
 impl EventProof {
     /// Check that the `EventProofTransaction` is valid.
-    pub fn validate(&self) -> Result<(), ValidationError> {
+    pub fn validate(&mut self) -> Result<(), ValidationError> {
         if self.block_hash != H256::hash(&self.block) {
             return Err(ValidationError::IncorrectBodyHash {
                 expected: self.block_hash.clone(),
@@ -74,13 +79,13 @@ impl EventProof {
         if self.block.receipts_root
             != self
                 .merkle_proof_of_receipt
-                .merkle_root(&self.transaction_receipt)
+                .merkle_root(&self.transaction_receipt)?
         {
             return Err(ValidationError::IncorrectReceiptRoot {
                 expected: self.block.receipts_root.clone(),
                 actual: self
                     .merkle_proof_of_receipt
-                    .merkle_root(&self.transaction_receipt),
+                    .merkle_root(&self.transaction_receipt)?,
             });
         }
         Ok(())
@@ -143,25 +148,4 @@ pub enum ReceiptMerkleProofNode {
         index: u8,
         branches: Box<[Option<Vec<u8>>; 16]>,
     },
-}
-
-/// A Merkle proof that a transaction receipt has been included in a block.
-///
-/// Merkle proofs for transaction receipts use Ethereum's [Patricia Merkle Trie][1] data structure.
-/// The `receipt_root` field in a block is the root of the trie.
-///
-/// Requires a [`TransactionReceipt`] to generate a leaf node, and the rest of the proof proceeds
-/// from the leaf node.
-///
-/// [1]: https://ethereum.org/se/developers/docs/data-structures-and-encoding/patricia-merkle-trie/
-pub struct ReceiptMerkleProof {
-    pub proof: Vec<ReceiptMerkleProofNode>,
-}
-
-impl ReceiptMerkleProof {
-    /// Given a transaction receipt, compute the Merkle root of the Patricia Merkle Trie using the
-    /// rest of the Merkle proof.
-    pub fn merkle_root(&self, _leaf: &TransactionReceipt) -> H256 {
-        unimplemented!()
-    }
 }

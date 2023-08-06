@@ -581,6 +581,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cita_trie"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8c3d2abadaa28e0d277f9f6d07a2052544f045d929cd4d6f7bcfb43567c9767"
+dependencies = [
+ "hasher",
+ "parking_lot 0.12.1",
+ "rlp 0.5.2",
+]
+
+[[package]]
 name = "clap"
 version = "4.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2094,6 +2105,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hasher"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbba678b6567f27ce22870d951f4208e1dc2fef64993bd4521b1d497ef8a3aa"
+dependencies = [
+ "tiny-keccak 2.0.2",
+]
+
+[[package]]
 name = "hashers"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2940,6 +2960,13 @@ dependencies = [
 [[package]]
 name = "merkle-proofs"
 version = "0.1.0"
+dependencies = [
+ "alloy-rlp",
+ "cita_trie",
+ "eyre",
+ "hasher",
+ "types",
+]
 
 [[package]]
 name = "milagro_bls"
@@ -5300,7 +5327,10 @@ version = "0.1.0"
 dependencies = [
  "alloy-rlp",
  "bytes",
+ "cita_trie",
  "ethers",
+ "eyre",
+ "hasher",
  "hex-literal",
  "keccak-hash",
  "proptest",
