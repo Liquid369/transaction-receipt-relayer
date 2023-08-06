@@ -48,3 +48,9 @@ impl ReceiptMerkleProof {
         ))
     }
 }
+
+impl Default for ReceiptMerkleProof {
+    fn default() -> Self {
+        Self::new()
+    }
+}
