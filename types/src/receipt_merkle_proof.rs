@@ -1,8 +1,8 @@
-use cita_trie::{PatriciaTrie, Trie};
-use cita_trie::MemoryDB;
-use hasher::HasherKeccak;
-use crate::{H256, TransactionReceipt, ValidationError};
+use crate::{TransactionReceipt, ValidationError, H256};
 use alloy_rlp::Encodable;
+use cita_trie::MemoryDB;
+use cita_trie::{PatriciaTrie, Trie};
+use hasher::HasherKeccak;
 use std::sync::Arc;
 
 /// A Merkle proof that a transaction receipt has been included in a block.
@@ -27,15 +27,24 @@ impl ReceiptMerkleProof {
     /// Given a transaction receipt, compute the Merkle root of the Patricia Merkle Trie using the
     /// rest of the Merkle proof.
     pub fn merkle_root(&mut self, leaf: &TransactionReceipt) -> Result<H256, ValidationError> {
-        let mut value  = vec![];
+        let mut value = vec![];
         leaf.encode(&mut value);
         let key = H256::hash(value.clone()).0.to_vec();
-        self.proof.insert(key, value).map_err(|_| ValidationError::IntenalPatriciaTrieError)?;
-        let root = self.proof.root().map_err(|_| ValidationError::IntenalPatriciaTrieError)?;
+        self.proof
+            .insert(key, value)
+            .map_err(|_| ValidationError::IntenalPatriciaTrieError)?;
+        let root = self
+            .proof
+            .root()
+            .map_err(|_| ValidationError::IntenalPatriciaTrieError)?;
         if root.len() != 32 {
-            return Err(ValidationError::InternalError)
+            return Err(ValidationError::InternalError);
         }
 
-        Ok(H256(root[..].try_into().map_err(|_| ValidationError::InternalError)?))
+        Ok(H256(
+            root[..]
+                .try_into()
+                .map_err(|_| ValidationError::InternalError)?,
+        ))
     }
 }
