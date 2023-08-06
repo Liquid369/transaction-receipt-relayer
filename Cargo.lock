@@ -2960,13 +2960,6 @@ dependencies = [
 [[package]]
 name = "merkle-proofs"
 version = "0.1.0"
-dependencies = [
- "alloy-rlp",
- "cita_trie",
- "eyre",
- "hasher",
- "types",
-]
 
 [[package]]
 name = "milagro_bls"
