@@ -37,9 +37,6 @@ impl ReceiptMerkleProof {
             .proof
             .root()
             .map_err(|_| ValidationError::IntenalPatriciaTrieError)?;
-        if root.len() != 32 {
-            return Err(ValidationError::InternalError);
-        }
 
         Ok(H256(
             root[..]
