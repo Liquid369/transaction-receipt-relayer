@@ -47,11 +47,12 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rust-toolchain;
         sqlFilter = path: _type: builtins.match ".*sql$" path != null;
-        sqlOrCargo = path: type:
-          (sqlFilter path type) || (craneLib.filterCargoSources path type);
+        testJson = path: _type: builtins.match ".*\/tests\/suits\/block_.*json$" path != null;
+        sqlOrJsonOrCargo = path: type:
+          (sqlFilter path type) || (testJson path type) || (craneLib.filterCargoSources path type);
         src = lib.cleanSourceWith {
           src = (craneLib.path ./.);
-          filter = sqlOrCargo;
+          filter = sqlOrJsonOrCargo;
         };
 
         # but many build.rs do - so we add little bit slowness for simplificaiton and reproduceability

@@ -2,7 +2,7 @@ use alloy_rlp::{Encodable, RlpEncodableWrapper};
 use keccak_hash::keccak;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, RlpEncodableWrapper, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, RlpEncodableWrapper, PartialEq, Clone, Serialize, Deserialize, Copy)]
 pub struct H256(pub [u8; 32]);
 
 impl H256 {
@@ -22,6 +22,18 @@ pub struct H64(pub [u8; 8]);
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct U256(pub [u8; 32]);
+
+impl U256 {
+    pub fn from_slice(slice: &[u8]) -> Self {
+        let mut bytes = [0u8; 32];
+        bytes[..slice.len()].copy_from_slice(slice);
+        Self(bytes)
+    }
+
+    pub fn zero() -> Self {
+        Self([0u8; 32])
+    }
+}
 
 impl Encodable for U256 {
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
@@ -48,6 +60,12 @@ pub struct H160(pub [u8; 20]);
 impl H160 {
     pub fn new(data: [u8; 20]) -> H160 {
         H160(data)
+    }
+
+    pub fn from_slice(slice: &[u8]) -> Self {
+        let mut bytes = [0u8; 20];
+        bytes[..slice.len()].copy_from_slice(slice);
+        Self(bytes)
     }
 }
 
