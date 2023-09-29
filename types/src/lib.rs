@@ -1,6 +1,7 @@
 mod receipt;
 pub use receipt::{
-    Log, Receipt, ReceiptMerkleProof, ReceiptMerkleProofNode, TransactionReceipt, TxType,
+    BranchNode, ExtensionNode, Leaf, Log, MerkleProof, MerkleProofNode, Nibbles, Receipt,
+    TransactionReceipt, TxType,
 };
 
 mod primitives;
@@ -13,6 +14,10 @@ mod bloom;
 pub use bloom::Bloom;
 
 pub(crate) mod encode;
+
+pub mod encoding {
+    pub use crate::receipt::LeafEncoder;
+}
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -42,7 +47,7 @@ pub struct EventProof {
 
     /// A Merkle proof that the transaction receipt has been included in the `receipt_root` field in
     /// the `block`.
-    pub merkle_proof_of_receipt: ReceiptMerkleProof,
+    pub merkle_proof_of_receipt: MerkleProof,
 }
 
 /// Error type for validating `EventProofTransaction`s.

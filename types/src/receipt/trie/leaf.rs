@@ -4,35 +4,62 @@ use crate::{encode, receipt::trie::nibble::Nibbles, TransactionReceipt};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ReceiptLeaf {
+pub struct Leaf {
     key: Vec<u8>,
     value: Vec<u8>,
 }
 
-impl ReceiptLeaf {
-    pub fn new(key: Nibbles, value: TransactionReceipt) -> Self {
+impl Leaf {
+    pub fn from_raw(key: Vec<u8>, value: Vec<u8>) -> Self {
+        Self { key, value }
+    }
+
+    pub fn from_transaction_receipt(key: Nibbles, value: TransactionReceipt) -> Self {
         Self {
-            key: key.encode_path_leaf(true),
+            key: key.encode_compact(),
             value: alloy_rlp::encode(value),
         }
     }
 }
 
-impl ReceiptLeaf {
+impl Encodable for Leaf {
+    fn encode(&self, result: &mut dyn BufMut) {
+        LeafEncoder {
+            key: &self.key,
+            value: &self.value,
+        }
+        .encode(result);
+    }
+
+    fn length(&self) -> usize {
+        LeafEncoder {
+            key: &self.key,
+            value: &self.value,
+        }
+        .length()
+    }
+}
+
+pub struct LeafEncoder<'a> {
+    pub key: &'a [u8],
+    pub value: &'a [u8],
+}
+
+impl<'a> LeafEncoder<'a> {
     fn header(&self) -> alloy_rlp::Header {
         alloy_rlp::Header {
-            payload_length: self.key.as_slice().length() + self.value.as_slice().length(),
+            payload_length: self.key.length() + self.value.length(),
             list: true,
         }
     }
 }
 
-impl Encodable for ReceiptLeaf {
+impl<'a> Encodable for LeafEncoder<'a> {
     fn encode(&self, result: &mut dyn BufMut) {
         let header = self.header();
         let mut out = Vec::with_capacity(header.payload_length);
         let out_buf = &mut out;
-        encode!(out_buf, header, self.key.as_slice(), self.value.as_slice());
+        encode!(out_buf, header, self.key, self.value);
 
         crate::encode::rlp_node(&out, result);
     }
@@ -53,7 +80,7 @@ mod tests {
     use test_strategy::proptest;
 
     use crate::{
-        receipt::trie::{leaf::ReceiptLeaf, nibble::Nibbles},
+        receipt::trie::{leaf::Leaf, nibble::Nibbles},
         Bloom, Log, Receipt, TransactionReceipt, H160, H256,
     };
 
@@ -76,7 +103,8 @@ mod tests {
         let mut receipt_encoded = vec![];
         receipt.encode(&mut receipt_encoded);
 
-        let our_leaf = ReceiptLeaf::new(Nibbles::new(key.clone()), receipt);
+        let our_leaf =
+            Leaf::from_transaction_receipt(Nibbles::from_raw(key.clone(), true), receipt);
 
         let mut our_leaf_encoded = vec![];
         our_leaf.encode(&mut our_leaf_encoded);
