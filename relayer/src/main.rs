@@ -5,14 +5,17 @@ use client::Client;
 use eyre::Result;
 use tokio::fs;
 
+mod bloom_processor;
 mod client;
+pub(crate) mod common;
 mod config;
 pub(crate) mod consts;
 mod db;
-mod merkle;
+mod substrate_client;
 
-use config::{Config, WatchAddress};
+use config::Config;
 use db::DB;
+use substrate_client::SubstrateClient;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -29,10 +32,38 @@ async fn main() -> Result<()> {
     let db = DB::new(&config.database)?;
     db.create_tables()?;
 
-    let watch_addresses = WatchAddress::decode_config(&config.watch_dog_config)?;
-    let mut client = Client::new(config.clone(), db.clone(), term, watch_addresses)?;
+    let chain_id: u32 = network_name_to_id(&config.network)?;
+    let substrate_client = SubstrateClient::new(&config.substrate_config_path, chain_id).await?;
 
-    let res = client.start().await;
-    log::info!("client was stopped, reason: {:?}", res);
+    let mut client = Client::new(
+        config.clone(),
+        db.clone(),
+        term.clone(),
+        substrate_client.clone(),
+    )?;
+    let mut bloom_processor =
+        bloom_processor::BloomProcessor::new(db.clone(), config, term, substrate_client, chain_id)?;
+
+    tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                log::info!("ctrl-c received, shutting down");
+            }
+
+            err = tokio::spawn(async move { client.start().await } ) => {
+                log::error!("client was stopped because of {err:?}");
+            }
+
+            err = tokio::spawn(async move { bloom_processor.run().await }) => {
+                log::error!("bloom processor was stopped because of {err:?}");
+            }
+    }
     Ok(())
+}
+
+fn network_name_to_id(network_name: &str) -> Result<u32> {
+    match network_name {
+        "mainnet" => Ok(1),
+        "goerli" => Ok(5),
+        _ => Err(eyre::eyre!("Unknown network name {}", network_name)),
+    }
 }

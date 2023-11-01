@@ -1,3 +1,8 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use]
+extern crate alloc;
+
 mod receipt;
 pub use receipt::{
     BranchNode, ExtensionNode, Leaf, Log, MerkleProof, MerkleProofNode, Nibbles, Receipt,
@@ -8,7 +13,7 @@ mod primitives;
 pub use primitives::{H160, H256, H64, U256};
 
 mod block_header;
-pub use block_header::BlockHeader;
+pub use block_header::{BlockHeader, BlockHeaderWithTransaction};
 
 mod bloom;
 pub use bloom::Bloom;

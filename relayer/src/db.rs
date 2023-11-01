@@ -5,7 +5,7 @@ use std::{
 
 use eyre::Result;
 use rusqlite::Connection;
-use types::{BlockHeader, H256};
+use types::{BlockHeaderWithTransaction, H256};
 
 #[derive(Clone)]
 pub struct DB {
@@ -58,7 +58,7 @@ impl DB {
         &self,
         block_number: u64,
         block_hash: H256,
-        block_header: BlockHeader,
+        block_header: BlockHeaderWithTransaction,
         bloom_positive: bool,
     ) -> Result<()> {
         let conn = self.conn.lock().expect("acquire mutex");
@@ -76,46 +76,47 @@ impl DB {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn select_block_by_block_hash(&self, block_hash: H256) -> Result<Option<BlockHeader>> {
+    pub fn select_blocks_to_process(
+        &self,
+        max_block: u64,
+        limit: u64,
+    ) -> Result<Vec<(u64, H256, BlockHeaderWithTransaction)>> {
         let conn = self.conn.lock().expect("acquire mutex");
         let mut stmt =
-            conn.prepare("SELECT block_header FROM blocks WHERE block_hash = :block_hash")?;
-        let raw_blocks_iter = stmt.query_map(&[(":block_hash", &block_hash.0)], |row| {
-            row.get::<_, String>(0)
+            conn.prepare("SELECT block_height, block_hash, block_Header FROM blocks WHERE is_processed = 0 AND block_height < ?1 ORDER BY block_height LIMIT ?2")?;
+        let blocks_iter = stmt.query_map((max_block, limit), |row| {
+            let block_height = row.get::<_, u64>(0)?;
+            let block_hash = row.get::<_, [u8; 32]>(1)?;
+            let block_header = row.get::<_, String>(2)?;
+            let block_header = serde_json::from_str(&block_header).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
+            Ok((block_height, H256(block_hash), block_header))
         })?;
 
-        Ok(raw_blocks_iter
-            .flatten()
-            .flat_map(|raw_blocks| serde_json::from_str(&raw_blocks))
-            .collect::<Vec<_>>()
-            .get(0)
-            .cloned())
+        Ok(blocks_iter.flatten().collect::<Vec<_>>())
     }
 
-    #[allow(dead_code)]
-    pub fn select_block_by_block_number(&self, block_number: u64) -> Result<Option<BlockHeader>> {
+    pub fn mark_block_processed(&self, block_number: u64) -> Result<()> {
         let conn = self.conn.lock().expect("acquire mutex");
-        let mut stmt =
-            conn.prepare("SELECT block_header FROM blocks WHERE block_height = :block_height")?;
-        let raw_blocks_iter = stmt.query_map(&[(":block_height", &block_number)], |row| {
-            row.get::<_, String>(0)
-        })?;
+        conn.execute(
+            "UPDATE blocks SET is_processed = 1 WHERE block_height = ?1",
+            (block_number,),
+        )?;
 
-        Ok(raw_blocks_iter
-            .flatten()
-            .flat_map(|raw_blocks| serde_json::from_str(&raw_blocks))
-            .collect::<Vec<_>>()
-            .get(0)
-            .cloned())
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use proptest::{prelude::any, prop_assert_eq, proptest, strategy::Strategy};
+    use proptest::{prelude::any, proptest, strategy::Strategy};
     use tempfile::{tempdir, TempDir};
-    use types::{BlockHeader, Bloom, H160, H256, U256};
+    use types::{BlockHeader, BlockHeaderWithTransaction, Bloom, H160, H256, U256};
 
     use super::DB;
 
@@ -256,6 +257,15 @@ mod tests {
             .prop_map(block_header_new)
     }
 
+    fn block_header_with_transaction_strat() -> impl Strategy<Value = BlockHeaderWithTransaction> {
+        (block_header_strat(), any::<Vec<[u8; 32]>>()).prop_map(|(header, transaction)| {
+            BlockHeaderWithTransaction {
+                header,
+                transactions: transaction.into_iter().map(H256).collect(),
+            }
+        })
+    }
+
     #[test]
     fn create_tables() {
         let (dir, db) = db();
@@ -268,7 +278,7 @@ mod tests {
         fn insert(
             block_number in u64_sqlite_strat(),
             block_hash in h256_strat(),
-            block_header in block_header_strat(),
+            block_header in block_header_with_transaction_strat(),
             bloom_positive: bool,
         ) {
             let (dir, db) = db();
@@ -279,22 +289,32 @@ mod tests {
         }
 
         #[test]
-        fn insert_and_get(
+        fn insert_non_positive_fetch_and_then_mark(
             block_number in u64_sqlite_strat(),
             block_hash in h256_strat(),
-            block_header in block_header_strat(),
-            bloom_positive: bool,
+            block_header in block_header_with_transaction_strat(),
         ) {
-            let (tmp, db) = db();
+            let (dir, db) = db();
             db.create_tables().unwrap();
-            db.insert_block(block_number, block_hash, block_header.clone(), bloom_positive)
+            db.insert_block(block_number, block_hash, block_header.clone(), true)
                 .unwrap();
-            let block = db.select_block_by_block_hash(block_hash).unwrap().unwrap();
-            prop_assert_eq!(&block, &block_header);
-            let block = db.select_block_by_block_number(block_number).unwrap().unwrap();
-            prop_assert_eq!(block, block_header);
+            let blocks = db.select_blocks_to_process(block_number + 1, 1).unwrap();
+            assert_eq!(blocks.len(), 1);
+            let (block_numb, hash, block) = blocks[0].clone();
+            assert_eq!(block_numb, block_number);
+            assert_eq!(hash, block_hash);
+            assert_eq!(block, block_header);
 
-            tmp.close().unwrap();
+            // Check if specify less max block we receive nothing
+            let blocks = db.select_blocks_to_process(block_number - 1,1).unwrap();
+            assert_eq!(blocks.len(), 0);
+
+            // Check that block is not received after processing
+            db.mark_block_processed(block_number).unwrap();
+            let blocks = db.select_blocks_to_process(block_number + 1, 1).unwrap();
+            assert_eq!(blocks.len(), 0);
+            dir.close().unwrap();
         }
+
     }
 }

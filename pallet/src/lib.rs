@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(slice_pattern)]
 
+use frame_support::sp_std::{convert::TryInto, prelude::*};
 use frame_support::traits::ExistenceRequirement::AllowDeath;
 use frame_support::{pallet_prelude::ensure, traits::Get, PalletId};
 pub use pallet::*;
-use sp_std::{convert::TryInto, prelude::*};
 use types::{EventProof, TransactionReceipt};
 use types::{H160, H256};
 use webb_proposals::TypedChainId;
@@ -26,6 +26,7 @@ pub mod pallet {
         Blake2_128Concat,
     };
     use frame_system::pallet_prelude::*;
+    use types::Log;
 
     #[pallet::pallet]
     #[pallet::without_storage_info]
@@ -40,12 +41,13 @@ pub mod pallet {
         #[pallet::constant]
         type PalletId: Get<PalletId>;
 
-        type Currency: Currency<Self::AccountId>;
+        type Currency: Currency<<Self as frame_system::Config>::AccountId>;
 
-        type PrivilegedOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+        type PrivilegedOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
     }
 
     /// ProcessedReceipts
+    /// TODO: clean up the storage
     /// Hashes of transaction receipts already processed. Stores up to
     /// [`hashes_gc_threshold`][1] entries.
     ///
@@ -61,7 +63,7 @@ pub mod pallet {
             NMapKey<Blake2_128Concat, u64>,          // Block height
             NMapKey<Blake2_128Concat, H256>,         // Hash of the receipt already processed
         ),
-        (),
+        Vec<Log>,
         OptionQuery,
     >;
 
@@ -151,7 +153,7 @@ pub mod pallet {
             let validator = ensure_signed(origin)?;
 
             // Create a str slice from the body.
-            let event_proof_str = sp_std::str::from_utf8(&event_proof)
+            let event_proof_str = frame_support::sp_std::str::from_utf8(&event_proof)
                 .map_err(|_| Error::<T>::ConvertToStringFailed)?;
 
             let event_proof: EventProof =
@@ -197,7 +199,7 @@ pub mod pallet {
                     if Self::is_contract_address_in_log(&event_proof.transaction_receipt, address) {
                         ProcessedReceipts::<T>::insert(
                             (typed_chain_id, block_number, transaction_receipt_hash),
-                            (),
+                            event_proof.transaction_receipt.receipt.logs.clone(),
                         );
                         ProcessedReceiptsHash::<T>::insert(
                             typed_chain_id,
@@ -314,7 +316,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-    pub fn account_id() -> T::AccountId {
+    pub fn account_id() -> <T as frame_system::Config>::AccountId {
         <T as Config>::PalletId::get().into_account_truncating()
     }
 
