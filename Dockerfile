@@ -1,4 +1,4 @@
-FROM rustlang/rust:nightly as builder
+FROM rustlang/rust:nightly-bookworm as builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -13,7 +13,7 @@ COPY . .
 RUN cargo build --locked --release -p eth-transaction-receipt-relayer --config net.git-fetch-with-cli=true
 
 
-FROM debian:11 as production
+FROM debian:bookworm as production
 
 ENV HOME /usr/src/app
 ENV DEBIAN_FRONTEND=noninteractive
